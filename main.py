@@ -1,6 +1,37 @@
 import json
-from fastapi import FastAPI
-from pydantic import BaseModel
+import os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+from bson import ObjectId
+from pymongo import MongoClient
+
+load_dotenv()
+
+client = MongoClient(os.getenv("MONGODB_URL"))
+db = client.deguvon
+
+app = FastAPI()
+
+class Response404(BaseModel):
+    detail: str = Field(..., example="Item not found")
+
+response404 = {404: {"model": Response404, "description": "The item was not found"}}
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v: str):
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid objectid")
+        return ObjectId(v)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(type="string")
+
 
 class Genre(BaseModel):
     url: str
@@ -11,6 +42,7 @@ class Episode(BaseModel):
     number: int | float
 
 class Anime(BaseModel):
+    # id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     flvid: int
     slug: str
     banner: str
@@ -23,17 +55,20 @@ class Anime(BaseModel):
     followers: int
     score: float
     episodes: list[Episode]
-    genres: list[Genre]
+    genres: list[str]
 
-animes: dict[str, Anime] = {key: Anime.parse_obj(val) for key, val in json.load(open('animes.json', encoding='utf-8')).items()}
-animes_list: list[Anime] = list(animes.values())
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+        allow_population_by_field_name = True
 
-app = FastAPI()
+# @app.get("/animes", response_model=list[Anime])
+# def anime_list() -> list[Anime]:
+#     return animes_list
 
-@app.get("/animes", response_model=list[Anime])
-def anime_list() -> list[Anime]:
-    return animes_list
-
-@app.get("/animes/{flvid}", response_model=Anime)
+@app.get("/animes/{flvid}", response_model=Anime, responses={**response404})
 def anime_detail(flvid: int) -> Anime:
-    return animes.get(f'{flvid}')
+    if (student := db.animes.find_one({"flvid": flvid})) is not None:
+        return student
+
+    raise HTTPException(status_code=404, detail=f"Anime {flvid} not found")
