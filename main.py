@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from bson import ObjectId
 from pymongo import MongoClient
+from typing import Optional, Union
 
 load_dotenv()
 
@@ -39,7 +40,7 @@ class Genre(BaseModel):
 
 class Episode(BaseModel):
     flvid: int
-    number: int | float
+    number: Union[int, float]
 
 class Anime(BaseModel):
     # id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
