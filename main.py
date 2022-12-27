@@ -5,11 +5,11 @@ from typing import Union
 from deta import Deta
 
 
-load_dotenv('.env')
+load_dotenv()
 
 deta = Deta()
 
-animes = deta.Base("animes")
+db_animes = deta.Base("Animes")
 
 app = FastAPI()
 
@@ -47,20 +47,19 @@ class Anime(BaseModel):
     score: float
     episodes: list[Episode]
     genres: list[str]
-
-    class Config:
-        arbitrary_types_allowed = True
-        # json_encoders = {ObjectId: str}
-        allow_population_by_field_name = True
-
+    url: str
+    next_episode: Union[str, None] = None
+    # related: list[Related]
+    # key: str = Field(..., alias="_key")
 # @app.get("/animes", response_model=list[Anime])
 # def anime_list() -> list[Anime]:
 #     return animes_list
 
 
-@app.get("/animes/{flvid}", response_model=Anime, responses={**response404})
-def anime_detail(flvid: int) -> Anime:
-    res = animes.fetch({"flvid": flvid})
-    if res.count == 0:
-        raise HTTPException(status_code=404, detail=f"Anime {flvid} not found")
-    return res.items[0]
+@app.get("/animes/{slug}", response_model=Anime, responses={**response404})
+def anime_detail(slug: str) -> Anime:
+    anime: Union[dict, None] = db_animes.get(slug)  # type: ignore
+    if anime is None:
+        raise HTTPException(
+            status_code=404, detail=f"Anime '{slug}' not found")
+    return Anime.parse_obj(anime)
